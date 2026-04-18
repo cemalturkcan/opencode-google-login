@@ -117,6 +117,159 @@ describe("createCustomFetch", () => {
     expect(await response.text()).toBe('{"candidates":[{"content":{"parts":[]}}]}');
   });
 
+  it("re-resolves the Gemini CLI managed project after token refresh", async () => {
+    const seenProjects: string[] = [];
+
+    globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+
+      if (url === "https://oauth2.googleapis.com/token") {
+        return new Response(
+          JSON.stringify({
+            access_token: "cli-access-refreshed",
+            expires_in: 3600,
+          }),
+          {
+            status: 200,
+            headers: { "content-type": "application/json" },
+          },
+        );
+      }
+
+      if (url.includes(":loadCodeAssist")) {
+        return new Response(
+          JSON.stringify({
+            cloudaicompanionProject: { id: "managed-project-999" },
+          }),
+          {
+            status: 200,
+            headers: { "content-type": "application/json" },
+          },
+        );
+      }
+
+      const body = JSON.parse(String(init?.body || "{}")) as { project?: string };
+      seenProjects.push(body.project || "");
+
+      return new Response('{"response":{"candidates":[{"content":{"parts":[]}}]}}', {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      });
+    }) as typeof fetch;
+
+    const customFetch = createCustomFetch(
+      async () => ({
+        type: "oauth",
+        kind: "gemini-cli",
+        access: "cli-access-stale",
+        refresh: "cli-refresh||managed-project-stale",
+        expires: Date.now() - 1_000,
+        email: "cli@example.com",
+      }),
+      {
+        auth: {
+          set: async () => {},
+        },
+      },
+      async () => [],
+    );
+
+    const response = await customFetch(
+      "https://generativelanguage.googleapis.com/v1beta/models/google-custom-gemini-3.1-pro:generateContent",
+      {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          "x-antigravity-model-id": "google-custom-gemini-3.1-pro",
+        },
+        body: JSON.stringify({ contents: [{ role: "user", parts: [{ text: "hello" }] }] }),
+      },
+    );
+
+    expect(seenProjects).toEqual(["managed-project-999"]);
+    expect(response.status).toBe(200);
+  });
+
+  it("re-resolves the Gemini CLI managed project after a permission denial", async () => {
+    const seenProjects: string[] = [];
+
+    globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+
+      if (url === "https://oauth2.googleapis.com/token") {
+        return new Response(
+          JSON.stringify({
+            access_token: "cli-access-refreshed",
+            expires_in: 3600,
+          }),
+          {
+            status: 200,
+            headers: { "content-type": "application/json" },
+          },
+        );
+      }
+
+      if (url.includes(":loadCodeAssist")) {
+        return new Response(
+          JSON.stringify({
+            cloudaicompanionProject: { id: "managed-project-fresh" },
+          }),
+          {
+            status: 200,
+            headers: { "content-type": "application/json" },
+          },
+        );
+      }
+
+      const body = JSON.parse(String(init?.body || "{}")) as { project?: string };
+      seenProjects.push(body.project || "");
+
+      if (body.project === "managed-project-stale") {
+        return new Response("The caller does not have permission", {
+          status: 403,
+          headers: { "content-type": "text/plain" },
+        });
+      }
+
+      return new Response('{"response":{"candidates":[{"content":{"parts":[]}}]}}', {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      });
+    }) as typeof fetch;
+
+    const customFetch = createCustomFetch(
+      async () => ({
+        type: "oauth",
+        kind: "gemini-cli",
+        access: "cli-access",
+        refresh: "cli-refresh||managed-project-stale",
+        expires: Date.now() + 10 * 60_000,
+        email: "cli@example.com",
+      }),
+      {
+        auth: {
+          set: async () => {},
+        },
+      },
+      async () => [],
+    );
+
+    const response = await customFetch(
+      "https://generativelanguage.googleapis.com/v1beta/models/google-custom-gemini-3.1-pro:generateContent",
+      {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          "x-antigravity-model-id": "google-custom-gemini-3.1-pro",
+        },
+        body: JSON.stringify({ contents: [{ role: "user", parts: [{ text: "hello" }] }] }),
+      },
+    );
+
+    expect(seenProjects).toEqual(["managed-project-stale", "managed-project-fresh"]);
+    expect(response.status).toBe(200);
+  });
+
   it("surfaces gemini-cli project resolution errors when no fallback account exists", async () => {
     globalThis.fetch = (async () => new Response("forbidden", { status: 403 })) as typeof fetch;
 

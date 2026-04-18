@@ -115,6 +115,14 @@ function shouldRotateCandidateOnError(candidate: OAuthInput, error: unknown): bo
   );
 }
 
+function stripManagedProjectId(refresh: string): string {
+  const parts = parseRefreshParts(refresh);
+  return formatRefreshParts({
+    refreshToken: parts.refreshToken,
+    projectId: parts.projectId,
+  });
+}
+
 function markAccountCooldown(
   refresh: string,
   response: Response,
@@ -221,11 +229,17 @@ async function prepareAuthState(
       type: "oauth",
       access: refreshed.access,
       expires: refreshed.expires,
-      refresh: formatRefreshParts({
-        refreshToken: refreshed.refresh,
-        projectId: existingParts.projectId,
-        managedProjectId: existingParts.managedProjectId,
-      }),
+      refresh:
+        authKind === "gemini-cli"
+          ? formatRefreshParts({
+              refreshToken: refreshed.refresh,
+              projectId: existingParts.projectId,
+            })
+          : formatRefreshParts({
+              refreshToken: refreshed.refresh,
+              projectId: existingParts.projectId,
+              managedProjectId: existingParts.managedProjectId,
+            }),
       email: auth.email,
       kind: authKind,
     };
@@ -316,8 +330,9 @@ export function createCustomFetch(
 
     candidateLoop: for (const candidate of candidates) {
       let candidateAuth = candidate;
+      let forcedProjectRefresh = false;
 
-      for (let refreshAttempt = 0; refreshAttempt < 2; refreshAttempt += 1) {
+      refreshLoop: for (let refreshAttempt = 0; refreshAttempt < 2; refreshAttempt += 1) {
         let readyAuth: ReadyAuth;
         try {
           readyAuth = await prepareAuthState(
@@ -391,6 +406,20 @@ export function createCustomFetch(
                 .clone()
                 .text()
                 .catch(() => "");
+              if (
+                readyAuth.kind === "gemini-cli" &&
+                !forcedProjectRefresh &&
+                shouldRotateOnResponse(response, bodyText)
+              ) {
+                forcedProjectRefresh = true;
+                candidateAuth = {
+                  ...candidateAuth,
+                  access: undefined,
+                  expires: undefined,
+                  refresh: stripManagedProjectId(candidateAuth.refresh || ""),
+                };
+                continue refreshLoop;
+              }
               if (shouldRotateOnResponse(response, bodyText)) {
                 continue candidateLoop;
               }
