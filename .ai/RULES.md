@@ -51,7 +51,20 @@
 
 - test files go in `tests/`
 - excluded from tsconfig build via `exclude: ["tests"]`
-- focus on: error detection, beta selection, SSE boundary buffering, retry logic
+- focus on: auth state transitions, account rotation, schema normalization, SSE boundary buffering, retry logic, and model-family routing
+
+## Provider Behavior
+
+- provider display name is `Google (custom)`
+- provider id stays `antigravity`
+- `google-custom-*` are the canonical model ids
+- if only Gemini CLI accounts exist, Claude models must not be exposed in provider config
+
+## Auth UX
+
+- supported auth methods are `Antigravity app (auto)`, `Antigravity (browser)`, `Google (Gemini CLI)`, `Remove saved account`, and `Remove all saved accounts`
+- browser auto-open must only happen for local interactive flows after listener setup succeeds
+- account removal must clear provider auth when the final saved account is removed
 
 ## Git
 

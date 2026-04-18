@@ -117,19 +117,7 @@ const MODEL_RESOLUTION: Record<string, ResolvedAntigravityModel> = {
     thinkingLevel: "low",
     isClaude: false,
   },
-  "antigravity-gemini-3-pro": {
-    actualModel: "gemini-3-pro-low",
-    cliModel: "gemini-3-pro-preview",
-    thinkingLevel: "low",
-    isClaude: false,
-  },
   "google-custom-gemini-3.1-pro": {
-    actualModel: "gemini-3.1-pro-low",
-    cliModel: "gemini-3.1-pro-preview",
-    thinkingLevel: "low",
-    isClaude: false,
-  },
-  "antigravity-gemini-3.1-pro": {
     actualModel: "gemini-3.1-pro-low",
     cliModel: "gemini-3.1-pro-preview",
     thinkingLevel: "low",
@@ -141,26 +129,11 @@ const MODEL_RESOLUTION: Record<string, ResolvedAntigravityModel> = {
     thinkingLevel: "low",
     isClaude: false,
   },
-  "antigravity-gemini-3-flash": {
-    actualModel: "gemini-3-flash",
-    cliModel: "gemini-3-flash-preview",
-    thinkingLevel: "low",
-    isClaude: false,
-  },
   "google-custom-claude-sonnet-4-6": {
     actualModel: "claude-sonnet-4-6",
     isClaude: true,
   },
-  "antigravity-claude-sonnet-4-6": {
-    actualModel: "claude-sonnet-4-6",
-    isClaude: true,
-  },
   "google-custom-claude-opus-4-6-thinking": {
-    actualModel: "claude-opus-4-6-thinking",
-    thinkingBudget: 32768,
-    isClaude: true,
-  },
-  "antigravity-claude-opus-4-6-thinking": {
     actualModel: "claude-opus-4-6-thinking",
     thinkingBudget: 32768,
     isClaude: true,
@@ -218,17 +191,7 @@ function pickTemplate(
       "gemini-3.1-pro-preview",
       "gemini-3-flash-preview",
     ],
-    "antigravity-gemini-3-pro": [
-      "gemini-3-pro-preview",
-      "gemini-3.1-pro-preview",
-      "gemini-3-flash-preview",
-    ],
     "google-custom-gemini-3.1-pro": [
-      "gemini-3.1-pro-preview-customtools",
-      "gemini-3.1-pro-preview",
-      "gemini-3-pro-preview",
-    ],
-    "antigravity-gemini-3.1-pro": [
       "gemini-3.1-pro-preview-customtools",
       "gemini-3.1-pro-preview",
       "gemini-3-pro-preview",
@@ -238,15 +201,8 @@ function pickTemplate(
       "gemini-2.5-flash",
       "gemini-2.5-pro",
     ],
-    "antigravity-gemini-3-flash": ["gemini-3-flash-preview", "gemini-2.5-flash", "gemini-2.5-pro"],
     "google-custom-claude-sonnet-4-6": ["gemini-3-flash-preview", "gemini-2.5-pro"],
-    "antigravity-claude-sonnet-4-6": ["gemini-3-flash-preview", "gemini-2.5-pro"],
     "google-custom-claude-opus-4-6-thinking": [
-      "gemini-3-pro-preview",
-      "gemini-3.1-pro-preview",
-      "gemini-2.5-pro",
-    ],
-    "antigravity-claude-opus-4-6-thinking": [
       "gemini-3-pro-preview",
       "gemini-3.1-pro-preview",
       "gemini-2.5-pro",
@@ -298,7 +254,7 @@ export async function registerAntigravityModels(
 export function resolveAntigravityModel(modelID: string): ResolvedAntigravityModel {
   return (
     MODEL_RESOLUTION[modelID] || {
-      actualModel: modelID.replace(/^(antigravity|google-custom)-/, ""),
+      actualModel: modelID.replace(/^google-custom-/, ""),
       isClaude: modelID.includes("claude"),
     }
   );

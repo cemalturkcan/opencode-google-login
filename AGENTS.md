@@ -2,7 +2,7 @@
 
 > Read `.ai/` files for detailed context.
 
-**Project**: OpenCode plugin for Antigravity OAuth on the Google provider
+**Project**: OpenCode plugin for the Google (custom) provider with Antigravity and Gemini CLI auth
 **Stack**: TypeScript, Bun, @opencode-ai/plugin SDK
 **Platform**: Linux, macOS, Windows
 
@@ -29,6 +29,6 @@ bun run format      # oxfmt --write
 3. No AI patterns in code, comments, commits, or PR descriptions — match the repo's existing commit style
 4. All code and comments in English
 5. Run `bun run typecheck && bun run build && bun run lint` before completing any task
-6. Keep auth and request handling aligned with Antigravity's Google OAuth and Cloud Code flow
+6. Keep auth, model visibility, and request routing aligned with Google (custom), Antigravity, and Gemini CLI Cloud Code flows
 7. Logging goes through `src/logger.ts`, never raw console.log
 8. Empty catch blocks are only acceptable when failure is explicitly expected and harmless

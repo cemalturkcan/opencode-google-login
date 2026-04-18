@@ -68,7 +68,7 @@ describe("resolveAntigravityModel", () => {
 });
 
 describe("buildAntigravityProviderConfig", () => {
-  it("builds a catalog-visible Antigravity provider config", () => {
+  it("builds a catalog-visible Google custom provider config", () => {
     const config = buildAntigravityProviderConfig();
 
     expect(config.name).toBe("Google (custom)");

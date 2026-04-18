@@ -46,7 +46,7 @@ describe("buildAntigravityRequest", () => {
         method: "POST",
         headers: {
           "content-type": "application/json",
-          "x-antigravity-model-id": "antigravity-claude-opus-4-6-thinking",
+          "x-antigravity-model-id": "google-custom-claude-opus-4-6-thinking",
         },
         body: JSON.stringify({ contents: [{ role: "user", parts: [{ text: "hi" }] }] }),
       },
@@ -63,9 +63,9 @@ describe("buildAntigravityRequest", () => {
     expect(headers.get("x-antigravity-model-id")).toBeNull();
   });
 
-  it("maps Antigravity Opus requests to Claude backend model", async () => {
+  it("maps Google custom Opus requests to Claude backend model", async () => {
     const result = await buildAntigravityRequest(
-      "https://generativelanguage.googleapis.com/v1beta/models/antigravity-claude-opus-4-6-thinking:generateContent",
+      "https://generativelanguage.googleapis.com/v1beta/models/google-custom-claude-opus-4-6-thinking:generateContent",
       {
         method: "POST",
         headers: { "content-type": "application/json" },
@@ -82,9 +82,9 @@ describe("buildAntigravityRequest", () => {
     expect(body.request.toolConfig.functionCallingConfig.mode).toBe("VALIDATED");
   });
 
-  it("maps Antigravity Gemini 3 Pro requests to backend model and thinking level", async () => {
+  it("maps Google custom Gemini 3 Pro requests to backend model and thinking level", async () => {
     const result = await buildAntigravityRequest(
-      "https://generativelanguage.googleapis.com/v1beta/models/antigravity-gemini-3-pro:generateContent",
+      "https://generativelanguage.googleapis.com/v1beta/models/google-custom-gemini-3-pro:generateContent",
       {
         method: "POST",
         headers: { "content-type": "application/json" },
@@ -102,7 +102,7 @@ describe("buildAntigravityRequest", () => {
 
   it("preserves explicit user thinking config", async () => {
     const result = await buildAntigravityRequest(
-      "https://generativelanguage.googleapis.com/v1beta/models/antigravity-gemini-3-pro:generateContent",
+      "https://generativelanguage.googleapis.com/v1beta/models/google-custom-gemini-3-pro:generateContent",
       {
         method: "POST",
         headers: { "content-type": "application/json" },
@@ -123,7 +123,7 @@ describe("buildAntigravityRequest", () => {
 
   it("preserves explicit Claude thinking config", async () => {
     const result = await buildAntigravityRequest(
-      "https://generativelanguage.googleapis.com/v1beta/models/antigravity-claude-opus-4-6-thinking:generateContent",
+      "https://generativelanguage.googleapis.com/v1beta/models/google-custom-claude-opus-4-6-thinking:generateContent",
       {
         method: "POST",
         headers: { "content-type": "application/json" },
@@ -144,7 +144,7 @@ describe("buildAntigravityRequest", () => {
 
   it("normalizes camelCase Claude thinking config into snake_case only", async () => {
     const result = await buildAntigravityRequest(
-      "https://generativelanguage.googleapis.com/v1beta/models/antigravity-claude-opus-4-6-thinking:generateContent",
+      "https://generativelanguage.googleapis.com/v1beta/models/google-custom-claude-opus-4-6-thinking:generateContent",
       {
         method: "POST",
         headers: { "content-type": "application/json" },
@@ -167,7 +167,7 @@ describe("buildAntigravityRequest", () => {
 
   it("normalizes camelCase Claude config even without a default thinking budget", async () => {
     const result = await buildAntigravityRequest(
-      "https://generativelanguage.googleapis.com/v1beta/models/antigravity-claude-sonnet-4-6:generateContent",
+      "https://generativelanguage.googleapis.com/v1beta/models/google-custom-claude-sonnet-4-6:generateContent",
       {
         method: "POST",
         headers: { "content-type": "application/json" },
@@ -191,7 +191,7 @@ describe("buildAntigravityRequest", () => {
 
   it("normalizes Claude tools into functionDeclarations with placeholder schema", async () => {
     const result = await buildAntigravityRequest(
-      "https://generativelanguage.googleapis.com/v1beta/models/antigravity-claude-sonnet-4-6:generateContent",
+      "https://generativelanguage.googleapis.com/v1beta/models/google-custom-claude-sonnet-4-6:generateContent",
       {
         method: "POST",
         headers: { "content-type": "application/json" },
@@ -216,7 +216,7 @@ describe("buildAntigravityRequest", () => {
 
   it("strips unsigned prior Claude thinking parts when no tool use exists", async () => {
     const result = await buildAntigravityRequest(
-      "https://generativelanguage.googleapis.com/v1beta/models/antigravity-claude-opus-4-6-thinking:generateContent",
+      "https://generativelanguage.googleapis.com/v1beta/models/google-custom-claude-opus-4-6-thinking:generateContent",
       {
         method: "POST",
         headers: { "content-type": "application/json" },
@@ -242,7 +242,7 @@ describe("buildAntigravityRequest", () => {
 
   it("strips unsigned Claude thinking even on tool-use turns", async () => {
     const result = await buildAntigravityRequest(
-      "https://generativelanguage.googleapis.com/v1beta/models/antigravity-claude-opus-4-6-thinking:generateContent",
+      "https://generativelanguage.googleapis.com/v1beta/models/google-custom-claude-opus-4-6-thinking:generateContent",
       {
         method: "POST",
         headers: { "content-type": "application/json" },
@@ -272,7 +272,7 @@ describe("buildAntigravityRequest", () => {
 
   it("uses providerMetadata signature for Claude messages", async () => {
     const result = await buildAntigravityRequest(
-      "https://generativelanguage.googleapis.com/v1beta/models/antigravity-claude-opus-4-6-thinking:generateContent",
+      "https://generativelanguage.googleapis.com/v1beta/models/google-custom-claude-opus-4-6-thinking:generateContent",
       {
         method: "POST",
         headers: { "content-type": "application/json" },
@@ -307,7 +307,7 @@ describe("buildAntigravityRequest", () => {
 
   it("assigns ids to Claude functionCall parts in contents", async () => {
     const result = await buildAntigravityRequest(
-      "https://generativelanguage.googleapis.com/v1beta/models/antigravity-claude-opus-4-6-thinking:generateContent",
+      "https://generativelanguage.googleapis.com/v1beta/models/google-custom-claude-opus-4-6-thinking:generateContent",
       {
         method: "POST",
         headers: { "content-type": "application/json" },
@@ -332,7 +332,7 @@ describe("buildAntigravityRequest", () => {
 
   it("matches missing functionResponse ids to prior Claude functionCall ids", async () => {
     const result = await buildAntigravityRequest(
-      "https://generativelanguage.googleapis.com/v1beta/models/antigravity-claude-opus-4-6-thinking:generateContent",
+      "https://generativelanguage.googleapis.com/v1beta/models/google-custom-claude-opus-4-6-thinking:generateContent",
       {
         method: "POST",
         headers: { "content-type": "application/json" },
@@ -361,7 +361,7 @@ describe("buildAntigravityRequest", () => {
 
   it("injects strict parameter signatures into tool descriptions", async () => {
     const result = await buildAntigravityRequest(
-      "https://generativelanguage.googleapis.com/v1beta/models/antigravity-gemini-3.1-pro:generateContent",
+      "https://generativelanguage.googleapis.com/v1beta/models/google-custom-gemini-3.1-pro:generateContent",
       {
         method: "POST",
         headers: { "content-type": "application/json" },

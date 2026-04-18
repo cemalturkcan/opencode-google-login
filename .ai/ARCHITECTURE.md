@@ -2,7 +2,7 @@
 
 ## Overview
 
-OpenCode plugin that exposes a dedicated Antigravity provider. It can import the locally installed Antigravity desktop session, complete Antigravity Google OAuth, or complete Gemini CLI-style Google OAuth. The plugin persists multiple saved accounts, prefers Gemini CLI accounts for Gemini-backed models, rotates across accounts on model-capacity limits, and rewrites provider requests to the appropriate Cloud Code endpoint path.
+OpenCode plugin that exposes a dedicated `Google (custom)` provider. It can import the locally installed Antigravity desktop session, complete Antigravity Google OAuth, or complete Gemini CLI-style Google OAuth. The plugin persists multiple saved accounts, prefers Gemini CLI accounts for Gemini-backed models, rotates across accounts on model-capacity limits, and rewrites provider requests to the appropriate Cloud Code endpoint path.
 
 ## Module Layout
 
@@ -50,9 +50,9 @@ The desktop app stores an opaque serialized value in `state.vscdb`. The plugin o
 
 The stored refresh field is packed as `refreshToken|projectId|managedProjectId`. That keeps auth state small while letting request handling reuse the resolved managed project without a fresh `loadCodeAssist` call on every request.
 
-### Antigravity is a separate provider entry
+### Google (custom) is a separate provider entry
 
-The plugin exposes `antigravity` as its own provider so the built-in Google OAuth flow can coexist with other Google plugins. Antigravity models still reuse Google-compatible request shapes internally, but authentication and model selection are separate at the OpenCode provider layer.
+The plugin exposes provider id `antigravity` with display name `Google (custom)` so the built-in Google provider can coexist with it. Requests still reuse Google-compatible shapes internally, but authentication, model selection, and retry behavior are separate at the OpenCode provider layer.
 
 ### Multi-account rotation is file-backed
 
@@ -62,9 +62,17 @@ Antigravity accounts are persisted in a plugin-owned file under OpenCode state. 
 
 For Gemini-backed Antigravity models, the plugin prefers saved `gemini-cli` accounts before Antigravity accounts so Gemini CLI quotas are consumed first. Claude-backed Antigravity models continue to use only Antigravity accounts.
 
+### CLI-only state hides Claude models
+
+If the saved account store only contains `gemini-cli` accounts, the provider catalog only exposes Gemini models. Claude models become visible again only when at least one Antigravity account exists.
+
 ### Schema cleanup is the main request mutation
 
 Antigravity is stricter than the public Gemini endpoint for tool schemas. `schema.ts` removes unsupported keywords and folds validation hints into descriptions so OpenCode tool definitions remain usable without changing the upstream tool surface.
+
+### Browser auto-open is local-only
+
+Browser OAuth methods auto-open the authorization URL only after the localhost callback listener is successfully bound. Headless or remote flows stay manual and only show the URL.
 
 ## Environment Variables
 

@@ -43,7 +43,7 @@ describe("createCustomFetch", () => {
         method: "POST",
         headers: {
           "content-type": "application/json",
-          "x-antigravity-model-id": "antigravity-claude-sonnet-4-6",
+          "x-antigravity-model-id": "google-custom-claude-sonnet-4-6",
         },
         body: JSON.stringify({ contents: [{ role: "user", parts: [{ text: "hello" }] }] }),
       },

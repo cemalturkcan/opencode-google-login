@@ -1,9 +1,8 @@
 {
-  "name": "opencode-antigravity-login",
+  "name": "opencode-google-login",
   "version": "1.4.0",
-  "description": "OpenCode plugin that imports Antigravity login and routes Google provider requests through Antigravity.",
+  "description": "OpenCode plugin that adds a Google (custom) provider backed by Antigravity and Gemini CLI auth.",
   "keywords": [
-    "antigravity",
     "gemini",
     "google",
     "login",
@@ -14,7 +13,7 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/cemalturkcan/opencode-antigravity-login.git"
+    "url": "git+https://github.com/cemalturkcan/opencode-google-login.git"
   },
   "files": [
     "dist",
