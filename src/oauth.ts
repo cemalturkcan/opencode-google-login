@@ -11,7 +11,7 @@ import {
 import { formatRefreshParts } from "./auth-state.ts";
 import { readUserEmail } from "./credentials.ts";
 import { log } from "./logger.ts";
-import { resolveProjectId } from "./project.ts";
+import { resolveProjectContextFromAccessToken } from "./project.ts";
 
 type OAuthState = {
   verifier: string;
@@ -141,7 +141,10 @@ export async function exchangeCodeForTokens(
       return { type: "failed", error: "Missing refresh token in Google OAuth response" };
     }
 
-    const managedProjectId = await resolveProjectId(payload.access_token, decoded.projectId);
+    const projectContext = await resolveProjectContextFromAccessToken(
+      payload.access_token,
+      decoded.projectId,
+    );
     const email = await readUserEmail(payload.access_token);
 
     return {
@@ -150,7 +153,7 @@ export async function exchangeCodeForTokens(
       refresh: formatRefreshParts({
         refreshToken: payload.refresh_token,
         projectId: decoded.projectId,
-        managedProjectId,
+        managedProjectId: projectContext.managedProjectId,
       }),
       expires: Date.now() + payload.expires_in * 1000,
       email,

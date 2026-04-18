@@ -47,11 +47,12 @@ export type AntigravityProviderConfig = {
   name: string;
   npm: string;
   env: string[];
-  options: { apiKey: string };
+  options: { apiKey: string; projectId: string };
   models: Record<string, ProviderConfigModel>;
 };
 
 export type ProviderModelVisibilityOptions = {
+  includeModels?: boolean;
   includeClaude: boolean;
 };
 
@@ -109,6 +110,8 @@ const ANTIGRAVITY_MODEL_SPECS: AntigravityModelSpec[] = [
     reasoning: true,
   },
 ] as const;
+
+const ANTIGRAVITY_MODEL_IDS = new Set(ANTIGRAVITY_MODEL_SPECS.map((spec) => spec.id));
 
 const MODEL_RESOLUTION: Record<string, ResolvedAntigravityModel> = {
   "google-custom-gemini-3-pro": {
@@ -235,16 +238,23 @@ async function loadGoogleTemplateModels(serverUrl: URL): Promise<Record<string, 
 export async function registerAntigravityModels(
   provider: ProviderLike,
   serverUrl: URL,
+  options: ProviderModelVisibilityOptions = { includeClaude: true },
 ): Promise<void> {
   provider.models ??= {};
 
-  const templateModels =
-    Object.keys(provider.models).length > 0
-      ? provider.models
-      : await loadGoogleTemplateModels(serverUrl);
+  const baseModels = Object.fromEntries(
+    Object.entries(provider.models).filter(([id]) => !ANTIGRAVITY_MODEL_IDS.has(id)),
+  );
+  provider.models = { ...baseModels };
 
-  for (const spec of ANTIGRAVITY_MODEL_SPECS) {
-    if (provider.models[spec.id]) continue;
+  if (options.includeModels === false) {
+    return;
+  }
+
+  const templateModels =
+    Object.keys(baseModels).length > 0 ? baseModels : await loadGoogleTemplateModels(serverUrl);
+
+  for (const spec of filterModelSpecs(options)) {
     const template = pickTemplate(provider, spec.id, templateModels);
     if (!template) continue;
     provider.models[spec.id] = cloneFromTemplate(template, provider.id, spec);
@@ -262,9 +272,14 @@ export function resolveAntigravityModel(modelID: string): ResolvedAntigravityMod
 
 export const __testExports = {
   ANTIGRAVITY_MODEL_SPECS,
+  ANTIGRAVITY_MODEL_IDS,
 };
 
 function filterModelSpecs(options: ProviderModelVisibilityOptions): AntigravityModelSpec[] {
+  if (options.includeModels === false) {
+    return [];
+  }
+
   return ANTIGRAVITY_MODEL_SPECS.filter(
     (spec) => options.includeClaude || !spec.id.includes("claude"),
   );
@@ -301,7 +316,7 @@ export function buildAntigravityProviderConfig(
     name: "Google (custom)",
     npm: "@ai-sdk/google",
     env: [],
-    options: { apiKey: "" },
+    options: { apiKey: "", projectId: "" },
     models,
   };
 }

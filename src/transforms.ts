@@ -4,7 +4,7 @@ import {
   EMPTY_SCHEMA_PLACEHOLDER_NAME,
   getAntigravityHeaders,
 } from "./constants.ts";
-import { buildGeminiCliUserAgent } from "./gemini-cli.ts";
+import { buildGeminiCliUserAgent, createGeminiCliActivityRequestId } from "./gemini-cli.ts";
 import { log } from "./logger.ts";
 import { resolveAntigravityModel } from "./models.ts";
 import { cleanJsonSchemaForAntigravity } from "./schema.ts";
@@ -13,6 +13,12 @@ type JsonRecord = Record<string, unknown>;
 
 function isRecord(value: unknown): value is JsonRecord {
   return value !== null && typeof value === "object" && !Array.isArray(value);
+}
+
+function ensureGeminiCliRequestIdentifiers(request: JsonRecord): void {
+  if (typeof request.session_id !== "string" || request.session_id.length === 0) {
+    request.session_id = randomUUID();
+  }
 }
 
 function rewriteDataLine(line: string): string {
@@ -555,21 +561,29 @@ export async function buildAntigravityRequest(
   }
 
   const hintedModelId = headers.get("x-antigravity-model-id") || undefined;
+  const [, urlModelId, action = ""] = match || [];
+  const requestedModelId = hintedModelId || urlModelId;
+  const resolvedModel = resolveAntigravityModel(requestedModelId || "");
+  const outboundModel =
+    backend === "gemini-cli" && resolvedModel.cliModel
+      ? resolvedModel.cliModel
+      : resolvedModel.actualModel;
 
   headers.set("Authorization", `Bearer ${accessToken}`);
   headers.set(
     "User-Agent",
     backend === "gemini-cli"
-      ? buildGeminiCliUserAgent(hintedModelId || undefined)
+      ? buildGeminiCliUserAgent(outboundModel || requestedModelId || undefined)
       : getAntigravityHeaders()["User-Agent"],
   );
   headers.delete("x-api-key");
+  headers.delete("x-goog-api-key");
   headers.delete("x-goog-user-project");
   headers.delete("x-goog-api-client");
   headers.delete("client-metadata");
   headers.delete("x-antigravity-model-id");
   if (backend === "gemini-cli") {
-    headers.set("x-activity-request-id", randomUUID());
+    headers.set("x-activity-request-id", createGeminiCliActivityRequestId());
   }
 
   if (!match) {
@@ -580,13 +594,6 @@ export async function buildAntigravityRequest(
     };
   }
 
-  const [, urlModelId, action] = match;
-  const requestedModelId = hintedModelId || urlModelId;
-  const resolvedModel = resolveAntigravityModel(requestedModelId);
-  const outboundModel =
-    backend === "gemini-cli" && resolvedModel.cliModel
-      ? resolvedModel.cliModel
-      : resolvedModel.actualModel;
   const streaming = action === "streamGenerateContent";
   if (streaming) headers.set("Accept", "text/event-stream");
 
@@ -613,6 +620,9 @@ export async function buildAntigravityRequest(
           normalizeClaudeTools(parsed.request);
         }
         injectToolParameterSignatures(parsed.request);
+        if (backend === "gemini-cli") {
+          ensureGeminiCliRequestIdentifiers(parsed.request);
+        }
         parsed.project = projectId;
         if (resolvedModel.isClaude) {
           applyClaudeOptions(parsed.request, resolvedModel.thinkingBudget);
@@ -624,6 +634,14 @@ export async function buildAntigravityRequest(
           );
         }
         parsed.model = outboundModel;
+        if (backend === "gemini-cli") {
+          if (typeof parsed.user_prompt_id !== "string" || parsed.user_prompt_id.length === 0) {
+            parsed.user_prompt_id = randomUUID();
+          }
+          delete parsed.requestType;
+          delete parsed.userAgent;
+          delete parsed.requestId;
+        }
         body = JSON.stringify(parsed);
       } else {
         sanitizeTools(parsed);
@@ -633,19 +651,31 @@ export async function buildAntigravityRequest(
           normalizeClaudeTools(parsed);
         }
         injectToolParameterSignatures(parsed);
+        if (backend === "gemini-cli") {
+          ensureGeminiCliRequestIdentifiers(parsed);
+        }
         if (resolvedModel.isClaude) {
           applyClaudeOptions(parsed, resolvedModel.thinkingBudget);
         } else {
           applyGeminiOptions(parsed, resolvedModel.thinkingLevel, resolvedModel.thinkingBudget);
         }
-        body = JSON.stringify({
-          project: projectId,
-          model: outboundModel,
-          request: parsed,
-          requestType: "agent",
-          userAgent: backend,
-          requestId: `agent-${randomUUID()}`,
-        });
+        body = JSON.stringify(
+          backend === "gemini-cli"
+            ? {
+                project: projectId,
+                model: outboundModel,
+                user_prompt_id: randomUUID(),
+                request: parsed,
+              }
+            : {
+                project: projectId,
+                model: outboundModel,
+                request: parsed,
+                requestType: "agent",
+                userAgent: backend,
+                requestId: `agent-${randomUUID()}`,
+              },
+        );
       }
     } catch (error) {
       log.warn("Failed to transform request body for Antigravity", { error: String(error) });

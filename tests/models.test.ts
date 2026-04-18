@@ -41,6 +41,61 @@ describe("registerAntigravityModels", () => {
       "Gemini 3 Pro (Google custom)",
     );
   });
+
+  it("can remove stale Claude models for CLI-only visibility", async () => {
+    const provider = {
+      id: "google",
+      models: {
+        "gemini-3-flash-preview": {
+          id: "gemini-3-flash-preview",
+          providerID: "google",
+          api: { id: "google", url: "https://example.test", npm: "pkg" },
+          name: "Gemini 3 Flash Preview",
+          capabilities: {
+            temperature: true,
+            reasoning: true,
+            attachment: true,
+            toolcall: true,
+            input: { text: true, audio: false, image: true, video: false, pdf: true },
+            output: { text: true, audio: false, image: false, video: false, pdf: false },
+          },
+          cost: { input: 1, output: 1, cache: { read: 1, write: 1 } },
+          limit: { context: 1000, output: 1000 },
+          status: "active" as const,
+          options: {},
+          headers: {},
+        },
+        "google-custom-claude-opus-4-6-thinking": {
+          id: "google-custom-claude-opus-4-6-thinking",
+          providerID: "google",
+          api: { id: "google", url: "https://example.test", npm: "pkg" },
+          name: "stale",
+          capabilities: {
+            temperature: true,
+            reasoning: true,
+            attachment: true,
+            toolcall: true,
+            input: { text: true, audio: false, image: true, video: false, pdf: true },
+            output: { text: true, audio: false, image: false, video: false, pdf: false },
+          },
+          cost: { input: 1, output: 1, cache: { read: 1, write: 1 } },
+          limit: { context: 1000, output: 1000 },
+          status: "active" as const,
+          options: {},
+          headers: {},
+        },
+      },
+    };
+
+    await registerAntigravityModels(provider, new URL("http://127.0.0.1:4096"), {
+      includeClaude: false,
+    });
+
+    expect(provider.models["google-custom-claude-opus-4-6-thinking"]).toBeUndefined();
+    expect(provider.models["google-custom-gemini-3-pro"]?.name).toBe(
+      "Gemini 3 Pro (Google custom)",
+    );
+  });
 });
 
 describe("resolveAntigravityModel", () => {

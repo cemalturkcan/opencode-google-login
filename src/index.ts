@@ -24,11 +24,11 @@ import { GEMINI_CLI_REDIRECT_URI } from "./constants.ts";
 import { openBrowser } from "./open-browser.ts";
 import { shouldUseManualOAuthFlow, startOAuthListener } from "./oauth-server.ts";
 import { buildAntigravityProviderConfig, registerAntigravityModels } from "./models.ts";
+import { resolveConfiguredProjectId, resolveConfiguredProjectIdFromClient } from "./project.ts";
 
 const plugin: Plugin = async ({ client, serverUrl }) => {
   log.info("Plugin initializing");
-  const storedAccounts = await readStoredAntigravityAccounts();
-  const includeClaudeModels = storedAccounts.some((account) => account.kind === "antigravity");
+  let latestConfiguredProjectId: string | undefined;
 
   async function clearProviderAuth(): Promise<void> {
     const removable = client.auth as unknown as {
@@ -39,19 +39,43 @@ const plugin: Plugin = async ({ client, serverUrl }) => {
     }
   }
 
+  async function resolveLatestConfiguredProjectId(provider?: {
+    options?: { projectId?: string };
+  }): Promise<string | undefined> {
+    const configProjectId = await resolveConfiguredProjectIdFromClient(client);
+    latestConfiguredProjectId = resolveConfiguredProjectId({
+      provider,
+      configProjectId,
+    });
+    return latestConfiguredProjectId;
+  }
+
+  async function resolveVisibilityOptions(forceHide = false) {
+    const storedAccounts = await readStoredAntigravityAccounts();
+    return {
+      includeModels: !forceHide,
+      includeClaude: storedAccounts.some((account) => account.kind === "antigravity"),
+      storedAccounts,
+    };
+  }
+
   return {
     async config(config) {
+      latestConfiguredProjectId = resolveConfiguredProjectId({ config });
+      const visibility = await resolveVisibilityOptions();
       const baseProviderConfig = buildAntigravityProviderConfig({
-        includeClaude: includeClaudeModels,
+        includeModels: true,
+        includeClaude: visibility.includeClaude,
       });
       config.provider ??= {};
       config.provider[PROVIDER_ID] = {
         ...baseProviderConfig,
         ...config.provider[PROVIDER_ID],
-        models: {
-          ...baseProviderConfig.models,
-          ...config.provider[PROVIDER_ID]?.models,
+        options: {
+          ...baseProviderConfig.options,
+          ...config.provider[PROVIDER_ID]?.options,
         },
+        models: baseProviderConfig.models,
       };
     },
     auth: {
@@ -59,12 +83,18 @@ const plugin: Plugin = async ({ client, serverUrl }) => {
 
       async loader(getAuth: () => Promise<any>, provider: any) {
         const auth = await getAuth();
+        const configuredProjectId = await resolveLatestConfiguredProjectId(provider);
+        const visibility = await resolveVisibilityOptions(!isOAuthAuth(auth));
+
+        if (provider?.models) {
+          await registerAntigravityModels(provider, serverUrl, {
+            includeModels: visibility.includeModels,
+            includeClaude: visibility.includeClaude,
+          });
+        }
 
         if (isOAuthAuth(auth)) {
           const refreshToken = parseRefreshParts(auth.refresh).refreshToken;
-          if (provider?.models) {
-            await registerAntigravityModels(provider, serverUrl);
-          }
 
           if (refreshToken && refreshToken !== getCurrentRefreshToken()) {
             clearRefreshInFlight();
@@ -83,7 +113,7 @@ const plugin: Plugin = async ({ client, serverUrl }) => {
 
           return {
             apiKey: "",
-            fetch: createCustomFetch(getAuth, client),
+            fetch: createCustomFetch(getAuth, client, undefined, async () => configuredProjectId),
           };
         }
 
@@ -98,7 +128,9 @@ const plugin: Plugin = async ({ client, serverUrl }) => {
           type: "oauth" as const,
           label: "Antigravity (browser)",
           async authorize() {
-            const authorization = createAuthorizationRequest();
+            const authorization = createAuthorizationRequest(
+              await resolveLatestConfiguredProjectId(),
+            );
 
             if (!shouldUseManualOAuthFlow()) {
               const listener = await startOAuthListener().catch(() => null);
@@ -176,6 +208,7 @@ const plugin: Plugin = async ({ client, serverUrl }) => {
           type: "oauth" as const,
           label: "Google (Gemini CLI)",
           async authorize() {
+            const configuredProjectId = await resolveLatestConfiguredProjectId();
             const authorization = createGeminiCliAuthorizationRequest();
 
             if (!shouldUseManualOAuthFlow()) {
@@ -203,6 +236,7 @@ const plugin: Plugin = async ({ client, serverUrl }) => {
                       const exchanged = await exchangeGeminiCliCodeForTokens(
                         parsed.code,
                         parsed.state,
+                        configuredProjectId,
                       );
                       if (exchanged.type === "success") {
                         await upsertStoredAntigravityAccount({
@@ -237,7 +271,11 @@ const plugin: Plugin = async ({ client, serverUrl }) => {
                 if ("error" in parsed) {
                   return { type: "failed" as const, error: parsed.error };
                 }
-                const exchanged = await exchangeGeminiCliCodeForTokens(parsed.code, parsed.state);
+                const exchanged = await exchangeGeminiCliCodeForTokens(
+                  parsed.code,
+                  parsed.state,
+                  configuredProjectId,
+                );
                 if (exchanged.type === "success") {
                   await upsertStoredAntigravityAccount({
                     kind: "gemini-cli",
@@ -252,7 +290,7 @@ const plugin: Plugin = async ({ client, serverUrl }) => {
             };
           },
         },
-        ...(storedAccounts.length > 0
+        ...((await readStoredAntigravityAccounts()).length > 0
           ? [
               {
                 type: "oauth" as const,
@@ -262,7 +300,7 @@ const plugin: Plugin = async ({ client, serverUrl }) => {
                     type: "select" as const,
                     key: "accountId",
                     message: "Select account to remove",
-                    options: storedAccounts.map((account) => ({
+                    options: (await readStoredAntigravityAccounts()).map((account) => ({
                       label: account.email || `${account.kind}:${account.id}`,
                       value: account.id,
                       hint: account.kind,

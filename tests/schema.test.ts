@@ -91,4 +91,28 @@ describe("cleanJsonSchemaForAntigravity", () => {
       required: ["value"],
     });
   });
+
+  it("drops non-string enums for numeric schemas and keeps the hint", () => {
+    const schema = {
+      type: "object",
+      properties: {
+        value: {
+          type: "integer",
+          enum: [0, 1, 2],
+        },
+      },
+      required: ["value"],
+    };
+
+    expect(cleanJsonSchemaForAntigravity(schema)).toEqual({
+      type: "object",
+      properties: {
+        value: {
+          type: "integer",
+          description: "Allowed: 0, 1, 2",
+        },
+      },
+      required: ["value"],
+    });
+  });
 });

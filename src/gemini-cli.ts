@@ -8,7 +8,7 @@ import {
 } from "./constants.ts";
 import { formatRefreshParts } from "./auth-state.ts";
 import { readUserEmail } from "./credentials.ts";
-import { resolveProjectId } from "./project.ts";
+import { resolveProjectContextFromAccessToken } from "./project.ts";
 
 type OAuthState = { verifier: string };
 
@@ -24,8 +24,14 @@ export type GeminiCliExchangeResult =
     })
   | { type: "failed"; error: string };
 
+const GEMINI_CLI_VERSION = "0.30.0-nightly.20260210.a2174751d";
+
 export function buildGeminiCliUserAgent(model = "gemini-code-assist"): string {
-  return `GeminiCLI/0.0.0/${model} (${process.platform}; ${process.arch})`;
+  return `GeminiCLI/${GEMINI_CLI_VERSION}/${model} (${process.platform}; ${process.arch})`;
+}
+
+export function createGeminiCliActivityRequestId(): string {
+  return Math.random().toString(36).substring(7);
 }
 
 function base64Url(input: Buffer | string): string {
@@ -71,6 +77,8 @@ export function createGeminiCliAuthorizationRequest(): GeminiCliAuthorizeResult 
 export async function exchangeGeminiCliCodeForTokens(
   code: string,
   state: string,
+  preferredProjectId?: string,
+  userAgentModel?: string,
 ): Promise<GeminiCliExchangeResult> {
   try {
     const decoded = decodeState(state);
@@ -101,7 +109,12 @@ export async function exchangeGeminiCliCodeForTokens(
       return { type: "failed", error: "Missing refresh token in Gemini CLI OAuth response" };
     }
 
-    const managedProjectId = await resolveProjectId(payload.access_token, undefined, "gemini-cli");
+    const projectContext = await resolveProjectContextFromAccessToken(
+      payload.access_token,
+      preferredProjectId,
+      "gemini-cli",
+      userAgentModel,
+    );
     const email = await readUserEmail(payload.access_token);
 
     return {
@@ -109,7 +122,8 @@ export async function exchangeGeminiCliCodeForTokens(
       access: payload.access_token,
       refresh: formatRefreshParts({
         refreshToken: payload.refresh_token,
-        managedProjectId,
+        projectId: preferredProjectId,
+        managedProjectId: projectContext.managedProjectId,
       }),
       expires: Date.now() + payload.expires_in * 1000,
       email,

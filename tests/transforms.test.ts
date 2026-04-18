@@ -14,6 +14,7 @@ describe("buildAntigravityRequest", () => {
         headers: {
           "content-type": "application/json",
           "x-api-key": "secret",
+          "x-goog-api-key": "secret-two",
           "x-goog-api-client": "should-be-removed",
           "client-metadata": "should-be-removed",
           "x-antigravity-model-id": "gemini-2.5-pro",
@@ -31,6 +32,7 @@ describe("buildAntigravityRequest", () => {
     expect(result.request).toBe("https://cloudcode-pa.googleapis.com/v1internal:generateContent");
     expect(headers.get("Authorization")).toBe("Bearer access-token");
     expect(headers.get("x-api-key")).toBeNull();
+    expect(headers.get("x-goog-api-key")).toBeNull();
     expect(headers.get("x-goog-api-client")).toBeNull();
     expect(headers.get("client-metadata")).toBeNull();
     expect(headers.get("x-antigravity-model-id")).toBeNull();
@@ -119,6 +121,29 @@ describe("buildAntigravityRequest", () => {
     const body = JSON.parse(String(result.init.body));
     expect(body.request.generationConfig.thinkingConfig.includeThoughts).toBe(false);
     expect(body.request.generationConfig.thinkingConfig.thinkingLevel).toBe("high");
+  });
+
+  it("uses the effective Gemini CLI model in the user agent", async () => {
+    const result = await buildAntigravityRequest(
+      "https://generativelanguage.googleapis.com/v1beta/models/google-custom-gemini-3.1-pro:generateContent",
+      {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          "x-goog-api-key": "secret-two",
+        },
+        body: JSON.stringify({ contents: [{ role: "user", parts: [{ text: "hi" }] }] }),
+      },
+      "access-token",
+      "project-123",
+      "https://cloudcode-pa.googleapis.com",
+      "gemini-cli",
+    );
+
+    const headers = result.init.headers as Headers;
+
+    expect(headers.get("User-Agent")).toContain("/gemini-3.1-pro-preview ");
+    expect(headers.get("x-goog-api-key")).toBeNull();
   });
 
   it("preserves explicit Claude thinking config", async () => {

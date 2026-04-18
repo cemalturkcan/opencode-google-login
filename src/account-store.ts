@@ -31,9 +31,13 @@ function getAccountsFilePath(): string {
   return join(getStateDir(), "antigravity-accounts.json");
 }
 
-export function buildAccountId(refresh: string, _email?: string): string {
+export function buildAccountId(
+  refresh: string,
+  _email?: string,
+  kind: "antigravity" | "gemini-cli" = "antigravity",
+): string {
   const refreshToken = parseRefreshParts(refresh).refreshToken || refresh;
-  return createHash("sha256").update(refreshToken).digest("hex").slice(0, 16);
+  return createHash("sha256").update(`${kind}:${refreshToken}`).digest("hex").slice(0, 16);
 }
 
 export async function readStoredAntigravityAccounts(): Promise<StoredAntigravityAccount[]> {
@@ -52,8 +56,12 @@ export async function readStoredAntigravityAccounts(): Promise<StoredAntigravity
       .map(
         (account): StoredAntigravityAccount => ({
           ...account,
-          id: buildAccountId(account.refresh, account.email),
           kind: account.kind === "gemini-cli" ? "gemini-cli" : "antigravity",
+          id: buildAccountId(
+            account.refresh,
+            account.email,
+            account.kind === "gemini-cli" ? "gemini-cli" : "antigravity",
+          ),
         }),
       );
 
@@ -85,14 +93,14 @@ export async function upsertStoredAntigravityAccount(
   input: Omit<StoredAntigravityAccount, "id">,
 ): Promise<StoredAntigravityAccount[]> {
   const nextAccount: StoredAntigravityAccount = {
-    id: buildAccountId(input.refresh, input.email),
+    id: buildAccountId(input.refresh, input.email, input.kind),
     ...input,
   };
 
   const current = await readStoredAntigravityAccounts();
   const normalizedCurrent = current.map((account) => ({
     ...account,
-    id: buildAccountId(account.refresh, account.email),
+    id: buildAccountId(account.refresh, account.email, account.kind),
   }));
   const seen = new Set<string>([nextAccount.id]);
   const deduped = normalizedCurrent.filter((account) => {

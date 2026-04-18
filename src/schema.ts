@@ -45,6 +45,10 @@ function appendHint(schema: JsonRecord, hint: string): JsonRecord {
   return { ...schema, description: description ? `${description} (${hint})` : hint };
 }
 
+function enumHint(values: unknown[]): string {
+  return `Allowed: ${values.map(String).join(", ")}`;
+}
+
 function normalizeEnumValues(type: unknown, values: unknown[]): unknown[] {
   if (type === "string") {
     return values.map((value) => String(value));
@@ -66,6 +70,14 @@ function normalizeEnumValues(type: unknown, values: unknown[]): unknown[] {
   }
 
   return values;
+}
+
+function shouldKeepEnum(type: unknown, values: unknown[]): boolean {
+  if (type === "string") {
+    return true;
+  }
+
+  return values.every((value) => typeof value === "string");
 }
 
 function resolveLocalRef(ref: string, root: unknown): unknown {
@@ -226,10 +238,20 @@ function cleanSchema(schema: unknown, root: unknown, parentSeenRefs: Set<string>
 
   if (Array.isArray(result.enum) && result.enum.length > 1) {
     const normalizedEnum = normalizeEnumValues(result.type, result.enum);
-    result.enum = normalizedEnum;
-    result = appendHint(result, `Allowed: ${normalizedEnum.map(String).join(", ")}`);
+    result = appendHint(result, enumHint(normalizedEnum));
+    if (shouldKeepEnum(result.type, normalizedEnum)) {
+      result.enum = normalizedEnum;
+    } else {
+      delete result.enum;
+    }
   } else if (Array.isArray(result.enum) && result.enum.length === 1) {
-    result.enum = normalizeEnumValues(result.type, result.enum);
+    const normalizedEnum = normalizeEnumValues(result.type, result.enum);
+    if (shouldKeepEnum(result.type, normalizedEnum)) {
+      result.enum = normalizedEnum;
+    } else {
+      result = appendHint(result, enumHint(normalizedEnum));
+      delete result.enum;
+    }
   }
 
   if (isRecord(result.properties)) {

@@ -62,19 +62,56 @@ function resolveRequestModelID(input: RequestInfo | URL, init?: RequestInit): st
 
 const accountCooldowns = new Map<string, number>();
 
-function getAccountKey(refresh: string, email?: string): string {
-  return buildAccountId(refresh, email);
+function getAccountKey(
+  refresh: string,
+  email?: string,
+  kind: "antigravity" | "gemini-cli" = "antigravity",
+): string {
+  return buildAccountId(refresh, email, kind);
 }
 
-function isCoolingDown(refresh: string, email?: string): boolean {
-  const until = accountCooldowns.get(getAccountKey(refresh, email));
+function isCoolingDown(
+  refresh: string,
+  email?: string,
+  kind: "antigravity" | "gemini-cli" = "antigravity",
+): boolean {
+  const until = accountCooldowns.get(getAccountKey(refresh, email, kind));
   return typeof until === "number" && until > Date.now();
 }
 
 function shouldRotateOnResponse(response: Response, bodyText: string): boolean {
-  if (response.status !== 429) return false;
-  return /RATE_LIMIT_EXCEEDED|quota will reset|exhausted your capacity|RESOURCE_EXHAUSTED/i.test(
-    bodyText,
+  if (response.status === 401) {
+    return /invalid authentication credentials|unauthenticated|unauthorized|login cookie/i.test(
+      bodyText,
+    );
+  }
+
+  if (response.status === 429) {
+    return /RATE_LIMIT_EXCEEDED|quota will reset|exhausted your capacity|RESOURCE_EXHAUSTED/i.test(
+      bodyText,
+    );
+  }
+
+  if (response.status === 403) {
+    return /The caller does not have permission|PERMISSION_DENIED|caller does not have permission/i.test(
+      bodyText,
+    );
+  }
+
+  return false;
+}
+
+function shouldRotateCandidateOnError(candidate: OAuthInput, error: unknown): boolean {
+  const message = error instanceof Error ? error.message : String(error);
+
+  if ((candidate.kind ?? "antigravity") === "gemini-cli") {
+    if (/could not resolve a usable Code Assist project/i.test(message)) {
+      return true;
+    }
+  }
+
+  return /token refresh failed|invalid_grant|invalid authentication credentials|401|403  — forbidden/i.test(
+    message,
   );
 }
 
@@ -83,6 +120,7 @@ function markAccountCooldown(
   response: Response,
   bodyText: string,
   email?: string,
+  kind: "antigravity" | "gemini-cli" = "antigravity",
 ): void {
   const retryAfterSeconds = Number(response.headers.get("retry-after") || "0");
   const retryAfterMsHeader = Number(response.headers.get("retry-after-ms") || "0");
@@ -90,11 +128,15 @@ function markAccountCooldown(
   const bodyRetryMs = bodyRetryDelay?.[1] ? Math.ceil(Number(bodyRetryDelay[1]) * 1000) : 0;
   const cooldownMs =
     retryAfterMsHeader || Math.ceil(retryAfterSeconds * 1000) || bodyRetryMs || 30_000;
-  accountCooldowns.set(getAccountKey(refresh, email), Date.now() + Math.max(cooldownMs, 1_000));
+  accountCooldowns.set(
+    getAccountKey(refresh, email, kind),
+    Date.now() + Math.max(cooldownMs, 1_000),
+  );
 }
 
 async function buildAuthCandidates(
   primary: OAuthInput,
+  readAccounts: typeof readStoredAntigravityAccounts,
   requestedModelID?: string,
 ): Promise<OAuthInput[]> {
   const candidates: OAuthInput[] = [];
@@ -104,18 +146,18 @@ async function buildAuthCandidates(
 
   if (
     isOAuthAuth(primary) &&
-    !isCoolingDown(primary.refresh, primary.email) &&
+    !isCoolingDown(primary.refresh, primary.email, primary.kind ?? "antigravity") &&
     allowedKinds.includes(primary.kind ?? "antigravity")
   ) {
     candidates.push(primary);
-    seen.add(getAccountKey(primary.refresh, primary.email));
+    seen.add(getAccountKey(primary.refresh, primary.email, primary.kind ?? "antigravity"));
   }
 
-  for (const account of await readStoredAntigravityAccounts()) {
-    const accountKey = getAccountKey(account.refresh, account.email);
+  for (const account of await readAccounts()) {
+    const accountKey = getAccountKey(account.refresh, account.email, account.kind);
     if (
       seen.has(accountKey) ||
-      isCoolingDown(account.refresh, account.email) ||
+      isCoolingDown(account.refresh, account.email, account.kind) ||
       !allowedKinds.includes(account.kind)
     ) {
       continue;
@@ -152,7 +194,12 @@ async function persistAuth(client: ClientApi, auth: ReadyAuth): Promise<void> {
   });
 }
 
-async function prepareAuthState(auth: OAuthInput, client: ClientApi): Promise<ReadyAuth> {
+async function prepareAuthState(
+  auth: OAuthInput,
+  client: ClientApi,
+  configuredProjectId?: string,
+  requestedModelID?: string,
+): Promise<ReadyAuth> {
   if (!isOAuthAuth(auth)) {
     throw new Error("OAuth auth state is required for Antigravity requests");
   }
@@ -184,7 +231,18 @@ async function prepareAuthState(auth: OAuthInput, client: ClientApi): Promise<Re
     };
   }
 
-  const projectContext = await ensureProjectContext(nextAuth, authKind);
+  const resolvedModel = requestedModelID ? resolveAntigravityModel(requestedModelID) : undefined;
+  const userAgentModel =
+    authKind === "gemini-cli"
+      ? (resolvedModel?.cliModel ?? resolvedModel?.actualModel ?? requestedModelID)
+      : undefined;
+
+  const projectContext = await ensureProjectContext(
+    nextAuth,
+    authKind,
+    configuredProjectId,
+    userAgentModel,
+  );
   const refreshParts = parseRefreshParts(projectContext.auth.refresh);
   setCurrentRefreshToken(refreshParts.refreshToken);
 
@@ -240,22 +298,50 @@ async function transformResponse(response: Response, streaming: boolean): Promis
   });
 }
 
-export function createCustomFetch(getAuth: () => Promise<OAuthInput>, client: ClientApi) {
+export function createCustomFetch(
+  getAuth: () => Promise<OAuthInput>,
+  client: ClientApi,
+  readAccounts: typeof readStoredAntigravityAccounts = readStoredAntigravityAccounts,
+  getConfiguredProjectId: () => Promise<string | undefined> = async () => undefined,
+) {
   return async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
     const auth = await getAuth();
     if (!isOAuthAuth(auth) || !isGenerativeLanguageRequest(input)) return fetch(input, init);
 
     const requestedModelID = resolveRequestModelID(input, init);
-    const candidates = await buildAuthCandidates(auth, requestedModelID);
+    const configuredProjectId = await getConfiguredProjectId();
+    const candidates = await buildAuthCandidates(auth, readAccounts, requestedModelID);
     let lastResponse: Response | null = null;
+    let lastCandidateError: unknown = null;
 
     candidateLoop: for (const candidate of candidates) {
       let candidateAuth = candidate;
 
       for (let refreshAttempt = 0; refreshAttempt < 2; refreshAttempt += 1) {
-        const readyAuth = await prepareAuthState(candidateAuth, client);
+        let readyAuth: ReadyAuth;
+        try {
+          readyAuth = await prepareAuthState(
+            candidateAuth,
+            client,
+            configuredProjectId,
+            requestedModelID,
+          );
+        } catch (error) {
+          log.warn("Failed to prepare auth state", {
+            kind: candidate.kind ?? "antigravity",
+            error: String(error),
+          });
+          if (shouldRotateCandidateOnError(candidate, error)) {
+            lastCandidateError = error;
+            continue candidateLoop;
+          }
+          throw error;
+        }
 
-        for (const endpoint of REQUEST_ENDPOINTS) {
+        const endpoints =
+          readyAuth.kind === "gemini-cli" ? [REQUEST_ENDPOINTS[0]] : REQUEST_ENDPOINTS;
+
+        for (const endpoint of endpoints) {
           try {
             const prepared = await buildAntigravityRequest(
               input,
@@ -268,9 +354,19 @@ export function createCustomFetch(getAuth: () => Promise<OAuthInput>, client: Cl
             const response = await fetchWithRetry(prepared.request, prepared.init, 3);
             lastResponse = response;
 
-            if (response.status === 401 && refreshAttempt === 0) {
-              candidateAuth = { ...candidateAuth, access: undefined, expires: undefined };
-              continue;
+            if (response.status === 401) {
+              const bodyText = await response
+                .clone()
+                .text()
+                .catch(() => "");
+              if (refreshAttempt === 0) {
+                candidateAuth = { ...candidateAuth, access: undefined, expires: undefined };
+                continue;
+              }
+              if (shouldRotateOnResponse(response, bodyText)) {
+                lastResponse = response;
+                continue candidateLoop;
+              }
             }
 
             if (response.status === 429) {
@@ -279,7 +375,23 @@ export function createCustomFetch(getAuth: () => Promise<OAuthInput>, client: Cl
                 .text()
                 .catch(() => "");
               if (shouldRotateOnResponse(response, bodyText)) {
-                markAccountCooldown(readyAuth.refresh, response, bodyText, readyAuth.email);
+                markAccountCooldown(
+                  readyAuth.refresh,
+                  response,
+                  bodyText,
+                  readyAuth.email,
+                  readyAuth.kind,
+                );
+                continue candidateLoop;
+              }
+            }
+
+            if (response.status === 403) {
+              const bodyText = await response
+                .clone()
+                .text()
+                .catch(() => "");
+              if (shouldRotateOnResponse(response, bodyText)) {
                 continue candidateLoop;
               }
             }
@@ -305,6 +417,14 @@ export function createCustomFetch(getAuth: () => Promise<OAuthInput>, client: Cl
       );
     }
 
+    if (lastCandidateError instanceof Error) {
+      throw lastCandidateError;
+    }
+
+    if (lastCandidateError) {
+      throw new Error(String(lastCandidateError));
+    }
+
     return new Response(JSON.stringify({ error: "antigravity_request_failed" }), {
       status: 502,
       headers: { "content-type": "application/json" },
@@ -314,4 +434,6 @@ export function createCustomFetch(getAuth: () => Promise<OAuthInput>, client: Cl
 
 export const __testExports = {
   getAccountKey,
+  shouldRotateCandidateOnError,
+  shouldRotateOnResponse,
 };

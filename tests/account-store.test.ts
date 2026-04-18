@@ -22,4 +22,10 @@ describe("buildAccountId", () => {
 
     expect(first).toBe(second);
   });
+
+  it("keeps antigravity and gemini-cli identities separate for the same refresh token", () => {
+    expect(__testExports.buildAccountId("refresh-token", undefined, "antigravity")).not.toBe(
+      __testExports.buildAccountId("refresh-token", undefined, "gemini-cli"),
+    );
+  });
 });
