@@ -1,7 +1,6 @@
 import { platform } from "node:os";
 
 export const PROVIDER_ID = "antigravity";
-export const APP_STATE_KEY = "antigravityUnifiedStateSync.oauthToken";
 
 export const CLIENT_ID =
   "1071006060591-tmhssin2h21lcre235vtolojh4g403ep.apps.googleusercontent.com";

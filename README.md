@@ -4,10 +4,6 @@
 
 ## Features
 
-### Installed App Import
-
-If Antigravity is installed and already logged in, the plugin can pull the desktop session from Antigravity's local state database and convert it into a fresh OAuth token set for OpenCode.
-
 ### Cross-Platform Support
 
 Works on **macOS**, **Linux**, and **Windows**.
@@ -70,7 +66,6 @@ Then restart OpenCode — it will re-download the plugin on next launch.
 
 | Method  | Label                     | How it works                                                       |
 | ------- | ------------------------- | ------------------------------------------------------------------ |
-| Auto    | Antigravity app (auto)    | Imports the installed desktop session from `state.vscdb`           |
 | Browser | Antigravity (browser)     | Antigravity's Google OAuth with localhost callback or manual paste |
 | Browser | Google (Gemini CLI)       | Gemini CLI-style Google OAuth for Gemini-backed quotas             |
 | Manage  | Remove saved account      | Removes one saved Google (custom) account                          |

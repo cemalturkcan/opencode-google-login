@@ -2,7 +2,7 @@
 
 ## Overview
 
-OpenCode plugin that exposes a dedicated `Google (custom)` provider. It can import the locally installed Antigravity desktop session, complete Antigravity Google OAuth, or complete Gemini CLI-style Google OAuth. The plugin persists multiple saved accounts, prefers Gemini CLI accounts for Gemini-backed models, rotates across accounts on model-capacity limits, and rewrites provider requests to the appropriate Cloud Code endpoint path.
+OpenCode plugin that exposes a dedicated `Google (custom)` provider. It can complete Antigravity Google OAuth or Gemini CLI-style Google OAuth. The plugin persists multiple saved accounts, prefers Gemini CLI accounts for Gemini-backed models, rotates across accounts on model-capacity limits, and rewrites provider requests to the appropriate Cloud Code endpoint path.
 
 ## Module Layout
 
@@ -15,7 +15,7 @@ src/
 ├── gemini-cli.ts    Gemini CLI OAuth, refresh, and user-agent helpers
 ├── logger.ts        JSONL debug logging, secret redaction
 ├── http.ts          fetchWithRetry (429, 529, retry-after)
-├── credentials.ts   token refresh and installed Antigravity session import
+├── credentials.ts   token refresh and user info lookup
 ├── oauth.ts         Google OAuth PKCE authorization + token exchange
 ├── oauth-server.ts  localhost callback listener for browser OAuth
 ├── project.ts       loadCodeAssist/onboardUser project resolution
@@ -41,10 +41,6 @@ OpenCode request
 ```
 
 ## Key Design Decisions
-
-### Installed app import is refresh-token first
-
-The desktop app stores an opaque serialized value in `state.vscdb`. The plugin only extracts the refresh token from that blob, then immediately refreshes it through Google's token endpoint instead of trusting the cached access token.
 
 ### Project resolution is persisted inside the refresh string
 

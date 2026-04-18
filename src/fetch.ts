@@ -6,10 +6,8 @@ import {
 import { PROVIDER_ID, REQUEST_ENDPOINTS } from "./constants.ts";
 import { formatRefreshParts, isOAuthAuth, needsRefresh, parseRefreshParts } from "./auth-state.ts";
 import {
-  APP_STATE_REFRESH_TOKEN,
   clearRefreshInFlight,
   getCurrentRefreshToken,
-  importInstalledAntigravityCredentials,
   refreshTokensSafe,
   setCurrentRefreshToken,
 } from "./credentials.ts";
@@ -167,24 +165,7 @@ async function prepareAuthState(auth: OAuthInput, client: ClientApi): Promise<Re
 
   let nextAuth = auth;
   const authKind = auth.kind ?? "antigravity";
-  if (authKind === "antigravity" && existingParts.refreshToken === APP_STATE_REFRESH_TOKEN) {
-    const imported = await importInstalledAntigravityCredentials();
-    if (!imported) {
-      throw new Error("No reusable Antigravity desktop session was found");
-    }
-    nextAuth = {
-      type: "oauth",
-      access: imported.access,
-      expires: imported.expires,
-      refresh: formatRefreshParts({
-        refreshToken: imported.refresh,
-        projectId: existingParts.projectId,
-        managedProjectId: existingParts.managedProjectId,
-      }),
-      email: auth.email,
-      kind: authKind,
-    };
-  } else if (needsRefresh(nextAuth)) {
+  if (needsRefresh(nextAuth)) {
     const refreshed =
       authKind === "gemini-cli"
         ? await refreshGeminiCliTokens(existingParts.refreshToken)

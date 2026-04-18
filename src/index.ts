@@ -5,18 +5,11 @@ import {
   removeStoredAntigravityAccount,
   upsertStoredAntigravityAccount,
 } from "./account-store.ts";
-import {
-  REMOVED_AUTH_SENTINEL,
-  formatRefreshParts,
-  isOAuthAuth,
-  parseRefreshParts,
-} from "./auth-state.ts";
+import { REMOVED_AUTH_SENTINEL, isOAuthAuth, parseRefreshParts } from "./auth-state.ts";
 import { PROVIDER_ID } from "./constants.ts";
 import {
   clearRefreshInFlight,
   getCurrentRefreshToken,
-  hasInstalledAntigravityApp,
-  importInstalledAntigravityCredentials,
   resetRefreshState,
   setCurrentRefreshToken,
 } from "./credentials.ts";
@@ -31,11 +24,9 @@ import { GEMINI_CLI_REDIRECT_URI } from "./constants.ts";
 import { openBrowser } from "./open-browser.ts";
 import { shouldUseManualOAuthFlow, startOAuthListener } from "./oauth-server.ts";
 import { buildAntigravityProviderConfig, registerAntigravityModels } from "./models.ts";
-import { resolveProjectId } from "./project.ts";
 
 const plugin: Plugin = async ({ client, serverUrl }) => {
   log.info("Plugin initializing");
-  const hasInstalledApp = await hasInstalledAntigravityApp();
   const storedAccounts = await readStoredAntigravityAccounts();
   const includeClaudeModels = storedAccounts.some((account) => account.kind === "antigravity");
 
@@ -70,11 +61,11 @@ const plugin: Plugin = async ({ client, serverUrl }) => {
         const auth = await getAuth();
 
         if (isOAuthAuth(auth)) {
+          const refreshToken = parseRefreshParts(auth.refresh).refreshToken;
           if (provider?.models) {
             await registerAntigravityModels(provider, serverUrl);
           }
 
-          const refreshToken = parseRefreshParts(auth.refresh).refreshToken;
           if (refreshToken && refreshToken !== getCurrentRefreshToken()) {
             clearRefreshInFlight();
             setCurrentRefreshToken(refreshToken);
@@ -103,52 +94,6 @@ const plugin: Plugin = async ({ client, serverUrl }) => {
       },
 
       methods: [
-        ...(hasInstalledApp
-          ? [
-              {
-                type: "oauth" as const,
-                label: "Antigravity app (auto)",
-                async authorize() {
-                  return {
-                    url: "",
-                    instructions:
-                      "Importing the OAuth session from your installed Antigravity app.",
-                    method: "auto" as const,
-                    async callback() {
-                      const tokens = await importInstalledAntigravityCredentials();
-                      if (!tokens) {
-                        return {
-                          type: "failed" as const,
-                          error: "No reusable Antigravity app credentials were found.",
-                        };
-                      }
-
-                      const managedProjectId = await resolveProjectId(tokens.access);
-                      await upsertStoredAntigravityAccount({
-                        kind: "antigravity",
-                        access: tokens.access,
-                        refresh: formatRefreshParts({
-                          refreshToken: tokens.refresh,
-                          managedProjectId,
-                        }),
-                        expires: tokens.expires,
-                      });
-                      return {
-                        type: "success" as const,
-                        access: tokens.access,
-                        refresh: formatRefreshParts({
-                          refreshToken: tokens.refresh,
-                          managedProjectId,
-                        }),
-                        expires: tokens.expires,
-                        kind: "antigravity" as const,
-                      };
-                    },
-                  };
-                },
-              },
-            ]
-          : []),
         {
           type: "oauth" as const,
           label: "Antigravity (browser)",

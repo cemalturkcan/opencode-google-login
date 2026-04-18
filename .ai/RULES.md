@@ -62,7 +62,7 @@
 
 ## Auth UX
 
-- supported auth methods are `Antigravity app (auto)`, `Antigravity (browser)`, `Google (Gemini CLI)`, `Remove saved account`, and `Remove all saved accounts`
+- supported auth methods are `Antigravity (browser)`, `Google (Gemini CLI)`, `Remove saved account`, and `Remove all saved accounts`
 - browser auto-open must only happen for local interactive flows after listener setup succeeds
 - account removal must clear provider auth when the final saved account is removed
 
