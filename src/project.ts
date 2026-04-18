@@ -1,6 +1,7 @@
 import {
   CODE_ASSIST_HEADERS,
   DEFAULT_PROJECT_ID,
+  PROVIDER_ID,
   PROJECT_CLIENT_METADATA_HEADER,
   PROJECT_ENDPOINTS,
   REQUEST_ENDPOINTS,
@@ -88,6 +89,7 @@ export function resolveConfiguredProjectId(
     normalizeProjectId(env.OPENCODE_GEMINI_PROJECT_ID) ??
     normalizeProjectId(input.provider?.options?.projectId) ??
     normalizeProjectId(input.configProjectId) ??
+    normalizeProjectId(input.config?.provider?.[PROVIDER_ID]?.options?.projectId) ??
     normalizeProjectId(input.config?.provider?.antigravity?.options?.projectId) ??
     normalizeProjectId(env.GOOGLE_CLOUD_PROJECT) ??
     normalizeProjectId(env.GOOGLE_CLOUD_PROJECT_ID)

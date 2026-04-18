@@ -24,9 +24,15 @@ describe("buildMetadata", () => {
 
     expect(
       __testExports.resolveConfiguredProjectId({
-        config: { provider: { antigravity: { options: { projectId: "config-project" } } } },
+        config: { provider: { "google-custom": { options: { projectId: "config-project" } } } },
       }),
     ).toBe("config-project");
+
+    expect(
+      __testExports.resolveConfiguredProjectId({
+        config: { provider: { antigravity: { options: { projectId: "legacy-project" } } } },
+      }),
+    ).toBe("legacy-project");
 
     expect(
       __testExports.resolveConfiguredProjectId({

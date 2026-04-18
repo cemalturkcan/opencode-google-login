@@ -31,12 +31,47 @@ const plugin: Plugin = async ({ client, serverUrl }) => {
   let latestConfiguredProjectId: string | undefined;
 
   async function clearProviderAuth(): Promise<void> {
-    const removable = client.auth as unknown as {
-      remove?: (input: { path: { providerID: string } }) => Promise<unknown>;
+    const authClient = client.auth as unknown as {
+      remove?: (input: unknown) => Promise<unknown>;
+      set?: (input: unknown) => Promise<unknown>;
     };
-    if (typeof removable.remove === "function") {
-      await removable.remove({ path: { providerID: PROVIDER_ID } }).catch(() => {});
+
+    const attempts = [
+      async () => {
+        if (typeof authClient.remove !== "function") return false;
+        await authClient.remove({ path: { id: PROVIDER_ID } });
+        return true;
+      },
+      async () => {
+        if (typeof authClient.remove !== "function") return false;
+        await authClient.remove({ path: { providerID: PROVIDER_ID } });
+        return true;
+      },
+      async () => {
+        if (typeof authClient.remove !== "function") return false;
+        await authClient.remove({ providerID: PROVIDER_ID });
+        return true;
+      },
+      async () => {
+        if (typeof authClient.set !== "function") return false;
+        await authClient.set({ path: { id: PROVIDER_ID }, body: undefined });
+        return true;
+      },
+    ];
+
+    for (const attempt of attempts) {
+      try {
+        if (await attempt()) {
+          return;
+        }
+      } catch {}
     }
+  }
+
+  function scheduleProviderAuthClear(): void {
+    setTimeout(() => {
+      void clearProviderAuth();
+    }, 0);
   }
 
   async function resolveLatestConfiguredProjectId(provider?: {
@@ -83,8 +118,12 @@ const plugin: Plugin = async ({ client, serverUrl }) => {
 
       async loader(getAuth: () => Promise<any>, provider: any) {
         const auth = await getAuth();
+        const hasRemovedAuth = auth?.type === "oauth" && auth.refresh === REMOVED_AUTH_SENTINEL;
+        if (hasRemovedAuth) {
+          scheduleProviderAuthClear();
+        }
         const configuredProjectId = await resolveLatestConfiguredProjectId(provider);
-        const visibility = await resolveVisibilityOptions(!isOAuthAuth(auth));
+        const visibility = await resolveVisibilityOptions(hasRemovedAuth);
 
         if (provider?.models) {
           await registerAntigravityModels(provider, serverUrl, {
@@ -323,6 +362,7 @@ const plugin: Plugin = async ({ client, serverUrl }) => {
 
                       if (!next) {
                         await clearProviderAuth();
+                        scheduleProviderAuthClear();
                         return {
                           type: "success" as const,
                           access: "",
@@ -355,6 +395,7 @@ const plugin: Plugin = async ({ client, serverUrl }) => {
                     async callback() {
                       await clearStoredAntigravityAccounts();
                       await clearProviderAuth();
+                      scheduleProviderAuthClear();
                       return {
                         type: "success" as const,
                         access: "",

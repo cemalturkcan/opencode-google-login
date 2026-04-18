@@ -48,7 +48,7 @@ The stored refresh field is packed as `refreshToken|projectId|managedProjectId`.
 
 ### Google (custom) is a separate provider entry
 
-The plugin exposes provider id `antigravity` with display name `Google (custom)` so the built-in Google provider can coexist with it. Requests still reuse Google-compatible shapes internally, but authentication, model selection, and retry behavior are separate at the OpenCode provider layer.
+The plugin exposes provider id `google-custom` with display name `Google (custom)` so the built-in Google provider can coexist with it. Requests still reuse Google-compatible shapes internally, but authentication, model selection, and retry behavior are separate at the OpenCode provider layer.
 
 ### Multi-account rotation is file-backed
 

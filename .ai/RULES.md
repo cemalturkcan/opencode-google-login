@@ -56,7 +56,7 @@
 ## Provider Behavior
 
 - provider display name is `Google (custom)`
-- provider id stays `antigravity`
+- provider id is `google-custom`
 - `google-custom-*` are the canonical model ids
 - if only Gemini CLI accounts exist, Claude models must not be exposed in provider config
 
