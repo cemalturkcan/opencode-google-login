@@ -235,6 +235,48 @@ async function loadGoogleTemplateModels(serverUrl: URL): Promise<Record<string, 
   return cachedGoogleTemplateModels;
 }
 
+function buildFallbackModel(providerID: string, spec: AntigravityModelSpec): ProviderModel {
+  return {
+    id: spec.id,
+    providerID,
+    api: {
+      id: "google",
+      url: "https://generativelanguage.googleapis.com/v1beta",
+      npm: "@ai-sdk/google",
+    },
+    name: spec.name,
+    capabilities: {
+      temperature: true,
+      reasoning: spec.reasoning,
+      attachment: true,
+      toolcall: true,
+      input: {
+        text: true,
+        audio: false,
+        image: true,
+        video: false,
+        pdf: true,
+      },
+      output: {
+        text: true,
+        audio: false,
+        image: false,
+        video: false,
+        pdf: false,
+      },
+    },
+    cost: {
+      input: 0,
+      output: 0,
+      cache: { read: 0, write: 0 },
+    },
+    limit: spec.limit,
+    status: "active",
+    options: { antigravity: true },
+    headers: {},
+  };
+}
+
 export async function registerAntigravityModels(
   provider: ProviderLike,
   serverUrl: URL,
@@ -242,23 +284,34 @@ export async function registerAntigravityModels(
 ): Promise<void> {
   provider.models ??= {};
 
+  const currentModels = { ...provider.models };
+
   const baseModels = Object.fromEntries(
-    Object.entries(provider.models).filter(([id]) => !ANTIGRAVITY_MODEL_IDS.has(id)),
+    Object.entries(currentModels).filter(([id]) => !ANTIGRAVITY_MODEL_IDS.has(id)),
   );
-  provider.models = { ...baseModels };
 
   if (options.includeModels === false) {
+    provider.models = { ...baseModels };
     return;
   }
 
   const templateModels =
-    Object.keys(baseModels).length > 0 ? baseModels : await loadGoogleTemplateModels(serverUrl);
+    Object.keys(baseModels).length > 0
+      ? baseModels
+      : Object.keys(currentModels).length > 0
+        ? currentModels
+        : await loadGoogleTemplateModels(serverUrl).catch(() => ({}));
+
+  const nextModels: Record<string, ProviderModel> = { ...baseModels };
 
   for (const spec of filterModelSpecs(options)) {
     const template = pickTemplate(provider, spec.id, templateModels);
-    if (!template) continue;
-    provider.models[spec.id] = cloneFromTemplate(template, provider.id, spec);
+    nextModels[spec.id] = template
+      ? cloneFromTemplate(template, provider.id, spec)
+      : buildFallbackModel(provider.id, spec);
   }
+
+  provider.models = nextModels;
 }
 
 export function resolveAntigravityModel(modelID: string): ResolvedAntigravityModel {

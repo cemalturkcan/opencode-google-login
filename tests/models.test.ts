@@ -96,6 +96,87 @@ describe("registerAntigravityModels", () => {
       "Gemini 3 Pro (Google custom)",
     );
   });
+
+  it("rebuilds custom models from existing entries without fetching remote templates", async () => {
+    const provider = {
+      id: "google-custom",
+      models: {
+        "google-custom-gemini-3-pro": {
+          id: "google-custom-gemini-3-pro",
+          providerID: "google-custom",
+          api: { id: "google", url: "https://example.test", npm: "pkg" },
+          name: "Existing Gemini",
+          capabilities: {
+            temperature: true,
+            reasoning: true,
+            attachment: true,
+            toolcall: true,
+            input: { text: true, audio: false, image: true, video: false, pdf: true },
+            output: { text: true, audio: false, image: false, video: false, pdf: false },
+          },
+          cost: { input: 1, output: 1, cache: { read: 1, write: 1 } },
+          limit: { context: 1000, output: 1000 },
+          status: "active" as const,
+          options: {},
+          headers: {},
+        },
+        "google-custom-claude-opus-4-6-thinking": {
+          id: "google-custom-claude-opus-4-6-thinking",
+          providerID: "google-custom",
+          api: { id: "google", url: "https://example.test", npm: "pkg" },
+          name: "Existing Claude",
+          capabilities: {
+            temperature: true,
+            reasoning: true,
+            attachment: true,
+            toolcall: true,
+            input: { text: true, audio: false, image: true, video: false, pdf: true },
+            output: { text: true, audio: false, image: false, video: false, pdf: false },
+          },
+          cost: { input: 1, output: 1, cache: { read: 1, write: 1 } },
+          limit: { context: 1000, output: 1000 },
+          status: "active" as const,
+          options: {},
+          headers: {},
+        },
+      },
+    };
+
+    await registerAntigravityModels(provider, new URL("http://127.0.0.1:1"), {
+      includeClaude: false,
+    });
+
+    expect(provider.models["google-custom-claude-opus-4-6-thinking"]).toBeUndefined();
+    expect(provider.models["google-custom-gemini-3-pro"]?.providerID).toBe("google-custom");
+    expect(provider.models["google-custom-gemini-3.1-pro"]?.name).toBe(
+      "Gemini 3.1 Pro (Google custom)",
+    );
+  });
+
+  it("builds fallback models when no template source is available", async () => {
+    const provider = {
+      id: "google-custom",
+      models: {},
+    };
+
+    await registerAntigravityModels(provider, new URL("http://127.0.0.1:1"));
+
+    expect(provider.models["google-custom-gemini-3.1-pro"]).toMatchObject({
+      providerID: "google-custom",
+      api: {
+        id: "google",
+        url: "https://generativelanguage.googleapis.com/v1beta",
+        npm: "@ai-sdk/google",
+      },
+      capabilities: {
+        toolcall: true,
+        reasoning: true,
+      },
+    });
+    expect(provider.models["google-custom-claude-opus-4-6-thinking"]?.name).toBe(
+      "Claude Opus 4.6 Thinking (Google custom)",
+    );
+  });
 });
 
 describe("resolveAntigravityModel", () => {
