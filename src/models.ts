@@ -56,13 +56,6 @@ export type ProviderModelVisibilityOptions = {
   includeClaude: boolean;
 };
 
-type ConfigProvidersResponse = {
-  providers?: Array<{
-    id?: string;
-    models?: Record<string, ProviderModel>;
-  }>;
-};
-
 type AntigravityModelSpec = {
   id: string;
   name: string;
@@ -181,7 +174,6 @@ function cloneFromTemplate(
   };
 }
 
-let cachedGoogleTemplateModels: Record<string, ProviderModel> | null = null;
 
 function pickTemplate(
   provider: ProviderLike,
@@ -217,22 +209,6 @@ function pickTemplate(
   }
 
   return Object.values(templateModels)[0];
-}
-
-async function loadGoogleTemplateModels(serverUrl: URL): Promise<Record<string, ProviderModel>> {
-  if (cachedGoogleTemplateModels) {
-    return cachedGoogleTemplateModels;
-  }
-
-  const response = await fetch(new URL("/config/providers", serverUrl));
-  if (!response.ok) {
-    throw new Error(`Failed to load provider templates: ${response.status} ${response.statusText}`);
-  }
-
-  const payload = (await response.json()) as ConfigProvidersResponse;
-  const googleProvider = payload.providers?.find((provider) => provider.id === "google");
-  cachedGoogleTemplateModels = googleProvider?.models || {};
-  return cachedGoogleTemplateModels;
 }
 
 function buildFallbackModel(providerID: string, spec: AntigravityModelSpec): ProviderModel {
@@ -279,7 +255,7 @@ function buildFallbackModel(providerID: string, spec: AntigravityModelSpec): Pro
 
 export async function registerAntigravityModels(
   provider: ProviderLike,
-  serverUrl: URL,
+  _serverUrl: URL,
   options: ProviderModelVisibilityOptions = { includeClaude: true },
 ): Promise<void> {
   provider.models ??= {};
@@ -295,12 +271,7 @@ export async function registerAntigravityModels(
     return;
   }
 
-  const templateModels =
-    Object.keys(baseModels).length > 0
-      ? baseModels
-      : Object.keys(currentModels).length > 0
-        ? currentModels
-        : await loadGoogleTemplateModels(serverUrl).catch(() => ({}));
+  const templateModels = Object.keys(baseModels).length > 0 ? baseModels : currentModels;
 
   const nextModels: Record<string, ProviderModel> = { ...baseModels };
 

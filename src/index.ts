@@ -24,7 +24,7 @@ import { GEMINI_CLI_REDIRECT_URI } from "./constants.ts";
 import { openBrowser } from "./open-browser.ts";
 import { shouldUseManualOAuthFlow, startOAuthListener } from "./oauth-server.ts";
 import { buildAntigravityProviderConfig, registerAntigravityModels } from "./models.ts";
-import { resolveConfiguredProjectId, resolveConfiguredProjectIdFromClient } from "./project.ts";
+import { resolveConfiguredProjectId } from "./project.ts";
 
 const plugin: Plugin = async ({ client, serverUrl }) => {
   log.info("Plugin initializing");
@@ -77,10 +77,9 @@ const plugin: Plugin = async ({ client, serverUrl }) => {
   async function resolveLatestConfiguredProjectId(provider?: {
     options?: { projectId?: string };
   }): Promise<string | undefined> {
-    const configProjectId = await resolveConfiguredProjectIdFromClient(client);
     latestConfiguredProjectId = resolveConfiguredProjectId({
       provider,
-      configProjectId,
+      configProjectId: latestConfiguredProjectId,
     });
     return latestConfiguredProjectId;
   }
