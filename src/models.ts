@@ -174,7 +174,6 @@ function cloneFromTemplate(
   };
 }
 
-
 function pickTemplate(
   provider: ProviderLike,
   modelID: string,
