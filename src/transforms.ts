@@ -191,6 +191,16 @@ function getThinkingText(value: unknown): string | undefined {
   return undefined;
 }
 
+function getGeminiNamespaceSignature(namespace: unknown): string | undefined {
+  if (!isRecord(namespace)) return undefined;
+  if (typeof namespace.thoughtSignature === "string" && namespace.thoughtSignature.length > 0) {
+    return namespace.thoughtSignature;
+  }
+  return typeof namespace.thought_signature === "string" && namespace.thought_signature.length > 0
+    ? namespace.thought_signature
+    : undefined;
+}
+
 function getThinkingSignature(part: JsonRecord): string | undefined {
   if (typeof part.thoughtSignature === "string" && part.thoughtSignature.length > 0) {
     return part.thoughtSignature;
@@ -201,7 +211,19 @@ function getThinkingSignature(part: JsonRecord): string | undefined {
   if (typeof part.signature === "string" && part.signature.length > 0) {
     return part.signature;
   }
+  const providerOptions = isRecord(part.providerOptions) ? part.providerOptions : undefined;
   const providerMetadata = isRecord(part.providerMetadata) ? part.providerMetadata : undefined;
+  const extraContent = isRecord(part.extra_content) ? part.extra_content : undefined;
+  const googleSignature =
+    getGeminiNamespaceSignature(providerOptions?.google) ??
+    getGeminiNamespaceSignature(providerOptions?.vertex) ??
+    getGeminiNamespaceSignature(providerMetadata?.google) ??
+    getGeminiNamespaceSignature(providerMetadata?.vertex) ??
+    getGeminiNamespaceSignature(extraContent?.google) ??
+    getGeminiNamespaceSignature(extraContent?.vertex);
+  if (googleSignature) {
+    return googleSignature;
+  }
   const anthropic =
     providerMetadata && isRecord(providerMetadata.anthropic)
       ? providerMetadata.anthropic
@@ -209,6 +231,97 @@ function getThinkingSignature(part: JsonRecord): string | undefined {
   return typeof anthropic?.signature === "string" && anthropic.signature.length > 0
     ? anthropic.signature
     : undefined;
+}
+
+function normalizeGeminiPart(part: unknown): unknown {
+  if (!isRecord(part) || isRecord(part.functionResponse)) {
+    return part;
+  }
+
+  const signature = getThinkingSignature(part);
+  if (!signature) {
+    return part;
+  }
+
+  if (typeof part.thoughtSignature === "string" && part.thoughtSignature.length > 0) {
+    return part;
+  }
+
+  return {
+    ...part,
+    thoughtSignature: signature,
+  };
+}
+
+function normalizeGeminiToolCall(toolCall: unknown): unknown {
+  if (!isRecord(toolCall)) {
+    return toolCall;
+  }
+
+  const signature = getThinkingSignature(toolCall);
+  if (!signature) {
+    return toolCall;
+  }
+
+  const extraContent = isRecord(toolCall.extra_content) ? toolCall.extra_content : {};
+  const google = isRecord(extraContent.google) ? extraContent.google : {};
+  if (typeof google.thought_signature === "string" && google.thought_signature.length > 0) {
+    return toolCall;
+  }
+
+  return {
+    ...toolCall,
+    extra_content: {
+      ...extraContent,
+      google: {
+        ...google,
+        thought_signature: signature,
+      },
+    },
+  };
+}
+
+function normalizeGeminiThinking(payload: JsonRecord): void {
+  if (Array.isArray(payload.contents)) {
+    payload.contents = payload.contents.map((content) => {
+      if (!isRecord(content) || !Array.isArray(content.parts)) {
+        return content;
+      }
+
+      if (content.role !== "model" && content.role !== "assistant") {
+        return content;
+      }
+
+      return {
+        ...content,
+        parts: content.parts.map((part) => normalizeGeminiPart(part)),
+      };
+    });
+  }
+
+  if (!Array.isArray(payload.messages)) {
+    return;
+  }
+
+  payload.messages = payload.messages.map((message) => {
+    if (!isRecord(message)) {
+      return message;
+    }
+
+    if (message.role !== "assistant" && message.role !== "model") {
+      return message;
+    }
+
+    return {
+      ...message,
+      ...(Array.isArray(message.content)
+        ? { content: message.content.map((block) => normalizeGeminiPart(block)) }
+        : {}),
+      ...(Array.isArray(message.tool_calls)
+        ? { tool_calls: message.tool_calls.map((toolCall) => normalizeGeminiToolCall(toolCall)) }
+        : {}),
+    };
+  });
 }
 
 function normalizeClaudeContents(payload: JsonRecord): void {
@@ -618,6 +731,8 @@ export async function buildAntigravityRequest(
           normalizeClaudeThinking(parsed.request);
           normalizeClaudeToolPairs(parsed.request);
           normalizeClaudeTools(parsed.request);
+        } else {
+          normalizeGeminiThinking(parsed.request);
         }
         injectToolParameterSignatures(parsed.request);
         if (backend === "gemini-cli") {
@@ -649,6 +764,8 @@ export async function buildAntigravityRequest(
           normalizeClaudeThinking(parsed);
           normalizeClaudeToolPairs(parsed);
           normalizeClaudeTools(parsed);
+        } else {
+          normalizeGeminiThinking(parsed);
         }
         injectToolParameterSignatures(parsed);
         if (backend === "gemini-cli") {

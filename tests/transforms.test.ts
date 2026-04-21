@@ -214,6 +214,166 @@ describe("buildAntigravityRequest", () => {
     expect(body.request.generationConfig.thinkingConfig.thinkingBudget).toBeUndefined();
   });
 
+  it("promotes Gemini thought signatures from providerOptions in contents", async () => {
+    const result = await buildAntigravityRequest(
+      "https://generativelanguage.googleapis.com/v1beta/models/google-custom-gemini-3.1-pro:generateContent",
+      {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          contents: [
+            { role: "user", parts: [{ text: "hava?" }] },
+            {
+              role: "model",
+              parts: [
+                {
+                  functionCall: { name: "weather", args: { location: "Paris" } },
+                  providerOptions: { google: { thoughtSignature: "sig-contents" } },
+                },
+              ],
+            },
+          ],
+        }),
+      },
+      "access-token",
+      "project-123",
+      "https://cloudcode-pa.googleapis.com",
+    );
+
+    const body = JSON.parse(String(result.init.body));
+    expect(body.request.contents[1].parts[0].thoughtSignature).toBe("sig-contents");
+  });
+
+  it("accepts vertex fallback Gemini thought signatures in contents", async () => {
+    const result = await buildAntigravityRequest(
+      "https://generativelanguage.googleapis.com/v1beta/models/google-custom-gemini-3.1-pro:generateContent",
+      {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          contents: [
+            { role: "user", parts: [{ text: "hava?" }] },
+            {
+              role: "assistant",
+              parts: [
+                {
+                  text: "Paris için bakıyorum",
+                  providerOptions: { vertex: { thoughtSignature: "sig-vertex" } },
+                },
+              ],
+            },
+          ],
+        }),
+      },
+      "access-token",
+      "project-123",
+      "https://cloudcode-pa.googleapis.com",
+    );
+
+    const body = JSON.parse(String(result.init.body));
+    expect(body.request.contents[1].parts[0].thoughtSignature).toBe("sig-vertex");
+  });
+
+  it("promotes Gemini thought signatures from providerMetadata in contents", async () => {
+    const result = await buildAntigravityRequest(
+      "https://generativelanguage.googleapis.com/v1beta/models/google-custom-gemini-3.1-pro:generateContent",
+      {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          contents: [
+            { role: "user", parts: [{ text: "hava?" }] },
+            {
+              role: "model",
+              parts: [
+                {
+                  text: "Paris için bakıyorum",
+                  providerMetadata: { google: { thoughtSignature: "sig-metadata" } },
+                },
+              ],
+            },
+          ],
+        }),
+      },
+      "access-token",
+      "project-123",
+      "https://cloudcode-pa.googleapis.com",
+    );
+
+    const body = JSON.parse(String(result.init.body));
+    expect(body.request.contents[1].parts[0].thoughtSignature).toBe("sig-metadata");
+  });
+
+  it("promotes Gemini thought signatures in AI SDK message content", async () => {
+    const result = await buildAntigravityRequest(
+      "https://generativelanguage.googleapis.com/v1beta/models/google-custom-gemini-3.1-pro:generateContent",
+      {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          messages: [
+            { role: "user", content: [{ type: "text", text: "hava?" }] },
+            {
+              role: "assistant",
+              content: [
+                {
+                  type: "tool-call",
+                  toolCallId: "call-1",
+                  toolName: "weather",
+                  input: { location: "Paris" },
+                  providerOptions: { google: { thoughtSignature: "sig-message" } },
+                },
+              ],
+            },
+          ],
+        }),
+      },
+      "access-token",
+      "project-123",
+      "https://cloudcode-pa.googleapis.com",
+    );
+
+    const body = JSON.parse(String(result.init.body));
+    expect(body.request.messages[1].content[0].thoughtSignature).toBe("sig-message");
+  });
+
+  it("promotes Gemini thought signatures in OpenAI-compatible tool calls", async () => {
+    const result = await buildAntigravityRequest(
+      "https://generativelanguage.googleapis.com/v1beta/models/google-custom-gemini-3.1-pro:generateContent",
+      {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          messages: [
+            { role: "user", content: "hava?" },
+            {
+              role: "assistant",
+              tool_calls: [
+                {
+                  function: {
+                    arguments: '{"location":"Paris"}',
+                    name: "weather",
+                  },
+                  id: "call-1",
+                  type: "function",
+                  providerOptions: { vertex: { thoughtSignature: "sig-openai" } },
+                },
+              ],
+            },
+          ],
+        }),
+      },
+      "access-token",
+      "project-123",
+      "https://cloudcode-pa.googleapis.com",
+    );
+
+    const body = JSON.parse(String(result.init.body));
+    expect(body.request.messages[1].tool_calls[0].extra_content.google.thought_signature).toBe(
+      "sig-openai",
+    );
+  });
+
   it("normalizes Claude tools into functionDeclarations with placeholder schema", async () => {
     const result = await buildAntigravityRequest(
       "https://generativelanguage.googleapis.com/v1beta/models/google-custom-claude-sonnet-4-6:generateContent",
